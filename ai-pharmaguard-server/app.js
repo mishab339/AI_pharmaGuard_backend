@@ -5,12 +5,14 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import { ethers } from 'ethers';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { createRequire } from "module";
 
 // --- IMPORTANT: You need your contract's ABI ---
 // After you compile your smart contract in the 'contracts' directory,
 // it will generate a JSON file. Copy the "abi" array from that file here.
 // For now, I'm using a simplified placeholder ABI.
-import PharmaRegistryABI from './PharmaRegistryABI.json' assert { type: 'json' };
+const require = createRequire(import.meta.url);
+const PharmaRegistryABI = require("./PharmaRegistryABI.json");
 
 
 // --- CONFIGURATION ---
