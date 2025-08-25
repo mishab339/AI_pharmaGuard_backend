@@ -8,10 +8,10 @@ async function main() {
   const PharmaRegistry = await hre.ethers.getContractFactory("PharmaRegistry");
   const pharmaRegistry = await PharmaRegistry.deploy();
 
-  await pharmaRegistry.deployed();
+  await pharmaRegistry.waitForDeployment();
 
   console.log(
-    `✅ PharmaRegistry contract deployed to: ${pharmaRegistry.address}`
+    `✅ PharmaRegistry contract deployed to: ${pharmaRegistry.target}`
   );
 }
 
