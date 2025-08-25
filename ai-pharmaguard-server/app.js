@@ -32,7 +32,7 @@ const CONTRACT_ADDRESS = process.env.CONTRACT_ADDRESS;
 
 // Initialize Google Gemini AI
 const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-const aiModel = genAI.getGenerativeModel({ model: "gemini-pro" });
+const aiModel = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
 
 // Initialize Ethers Provider and Signer for Shardeum
 const provider = new ethers.JsonRpcProvider(SHARDEUM_RPC_URL);
@@ -55,62 +55,60 @@ app.post('/api/v1/verifyScan', async (req, res) => {
 
     console.log(`\nReceived scan for ${medicineId} at ${location}`);
 
-    try {
-        // 2. Read Scan History from the Blockchain
-        // NOTE: Your contract must have a function like `getScanHistory(string memory medicineId)`
-        // that returns an array of strings.
-        console.log("Fetching scan history from Shardeum...");
-        const scanHistory = await pharmaContract.getScanHistory(medicineId);
-        console.log("History found:", scanHistory);
+try {
+    console.log("Fetching scan history from Shardeum...");
+    const scanHistory = await pharmaContract.getScanHistory(medicineId);
+    console.log("History found:", scanHistory);
 
-        // 3. AI Analysis
-        console.log("Sending data to AI for analysis...");
-        const prompt = `
-            You are a supply chain anomaly detector. Analyze the following scan history for a medicine with ID "${medicineId}".
-            A new scan just occurred at location "${location}".
-            The previous scans were: [${scanHistory.join(', ')}].
-            Based on the sequence of locations and plausible travel times, is the new scan 'PLAUSIBLE' or 'ANOMALOUS'?
-            Respond with only one word: PLAUSIBLE or ANOMALOUS.
-        `;
+    // AI analysis
+    const prompt = `
+        You are a supply chain anomaly detector. Analyze the following scan history for a medicine with ID "${medicineId}".
+        A new scan just occurred at location "${location}".
+        The previous scans were: [${scanHistory.join(', ')}].
+        Based on the sequence of locations and plausible travel times, is the new scan 'PLAUSIBLE' or 'ANOMALOUS'?
+        Respond with only one word: PLAUSIBLE or ANOMALOUS.
+    `;
 
-        const result = await aiModel.generateContent(prompt);
-        const aiResponseText = result.response.text().trim();
-        console.log(`AI Verdict: ${aiResponseText}`);
+    const result = await aiModel.generateContent(prompt);
+    const aiResponseText = result.response.text().trim().toUpperCase();
+    const verdict = aiResponseText.includes("ANOMALOUS") ? "ANOMALOUS" : "PLAUSIBLE";
 
-        // 4. Log the New Scan on the Blockchain
-        console.log("Logging new scan to the blockchain...");
-        const logTx = await pharmaContract.logScan(medicineId, location, userType);
-        const receipt = await logTx.wait();
-        console.log(`Scan logged. Transaction hash: ${receipt.hash}`);
+    console.log(`AI Verdict: ${verdict}`);
 
-        // 5. Flag if Anomalous & Prepare Final Response
-        let finalStatus, finalMessage;
+    // Log scan on-chain
+    const logTx = await pharmaContract.logScan(medicineId, location, userType);
+    const receipt = await logTx.wait();
+    console.log(`Scan logged. Tx hash: ${receipt.hash}`);
 
-        if (aiResponseText.includes("ANOMALOUS")) {
-            console.log("Anomaly detected! Flagging item as counterfeit...");
+    let finalStatus, finalMessage;
+
+    if (verdict === "ANOMALOUS") {
+        try {
             const flagTx = await pharmaContract.flagAsCounterfeit(medicineId);
             await flagTx.wait();
             console.log("Item flagged on-chain.");
-
-            finalStatus = "ANOMALOUS";
-            finalMessage = "Warning! This product's scan pattern is impossible. It may be counterfeit.";
-        } else {
-            finalStatus = "VERIFIED";
-            finalMessage = "This medicine's scan history is valid. Verified authentic.";
+        } catch (flagErr) {
+            console.warn("Item may already be flagged:", flagErr.message);
         }
-        
-        // 6. Send Response to Frontend
-        return res.status(200).json({
-            status: finalStatus,
-            message: finalMessage,
-            transactionHash: receipt.hash
-        });
 
-    } catch (error) {
-        console.error("!!--- ERROR ---!!");
-        console.error(error);
-        return res.status(500).json({ error: "An internal server error occurred." });
+        finalStatus = "ANOMALOUS";
+        finalMessage = "⚠️ Warning! This product's scan pattern is impossible. It may be counterfeit.";
+    } else {
+        finalStatus = "VERIFIED";
+        finalMessage = "✅ This medicine's scan history is valid. Verified authentic.";
     }
+
+    return res.status(200).json({
+        status: finalStatus,
+        message: finalMessage,
+        transactionHash: receipt.hash
+    });
+
+} catch (error) {
+    console.error("!!--- ERROR ---!!", error);
+    return res.status(500).json({ error: "An internal server error occurred." });
+}
+
 });
 
 

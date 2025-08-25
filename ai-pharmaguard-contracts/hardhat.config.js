@@ -12,7 +12,7 @@ module.exports = {
     shardeum: {
       url: process.env.SHARDEUM_RPC_URL, // This comes from your .env file
       accounts: [process.env.ORACLE_PRIVATE_KEY], // This also comes from your .env file
-      chainId: 8083 // The specific Chain ID for the Sphinx Dapp network
+      chainId: 8080 // The specific Chain ID for the Sphinx Dapp network
     }
   }
 
